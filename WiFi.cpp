@@ -14,17 +14,17 @@
 /*
  WiFi.cpp - Adaptation of Arduino WiFi library for Energia and CC3200 launchpad
  Author: Noah Luskey | LuskeyNoah@gmail.com
- 
+
  This library is free software; you can redistribute it and/or
  modify it under the terms of the GNU Lesser General Public
  License as published by the Free Software Foundation; either
  version 2.1 of the License, or (at your option) any later version.
- 
+
  This library is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  Lesser General Public License for more details.
- 
+
  You should have received a copy of the GNU Lesser General Public
  License along with this library; if not, write to the Free Software
  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
@@ -116,14 +116,14 @@ bool WiFiClass::init()
     //start the SimpleLink driver (no callback)
     //
     int iRet = sl_Start(NULL, NULL, NULL);
-    
+
     //
     //check if sl_start failed
     //
     if (iRet==ROLE_STA_ERR || iRet==ROLE_AP_ERR || iRet==ROLE_P2P_ERR) {
         return false;
     }
-    
+
     //
     //set the mode to station if it's not already in station mode
     //
@@ -132,7 +132,7 @@ bool WiFiClass::init()
         sl_Stop(0);
         sl_Start(NULL, NULL, NULL);
     }
-    
+
     //
     //Delete all profiles$
     //
@@ -142,11 +142,14 @@ bool WiFiClass::init()
     //disconnect from anything if for some reason it's connected
     //
     //sl_WlanDisconnect();
-    
+
+    // disable auto connect
+    sl_WlanPolicySet(SL_POLICY_CONNECTION , SL_CONNECTION_POLICY(0,0,0,0,0), 0, 0);
+
     sl_NetAppMDNSUnRegisterService(0, 0);
 
     _initialized = true;
-    
+
     return true;
 }
 
@@ -183,9 +186,9 @@ char* WiFiClass::firmwareVersion()
     SlVersionFull ver = {0};
     ucConfigOpt = SL_DEVICE_GENERAL_VERSION;
     ucConfigLen = sizeof(ver);
-    lRetVal = sl_DevGet(SL_DEVICE_GENERAL_CONFIGURATION, &ucConfigOpt, 
+    lRetVal = sl_DevGet(SL_DEVICE_GENERAL_CONFIGURATION, &ucConfigOpt,
                                 &ucConfigLen, (unsigned char *)(&ver));
-    
+
     sprintf(fwVersion, "%ld.%ld.%ld.%ld.31.%ld.%ld.%ld.%ld.%d.%d.%d.%d",
     ver.NwpVersion[0],ver.NwpVersion[1],ver.NwpVersion[2],ver.NwpVersion[3],
     ver.ChipFwAndPhyVersion.FwVersion[0],ver.ChipFwAndPhyVersion.FwVersion[1],
@@ -210,12 +213,40 @@ void WiFiClass::setIpDefaults()
     }
 }
 
+int WiFiClass::begin() {
+    //
+    // If we already called begin and are already connecting
+    // then return the status. This prevents sl_WlanConnect()
+    // from being called repeatedly.
+    //
+    if(_connecting) {
+        delay(500);
+        return status();
+    }
+
+    //
+    //initialize the simplelink driver and make sure it was a success
+    //
+    bool init_success = init();
+    if (!init_success) {
+        return WL_CONNECT_FAILED;
+    }
+
+    //
+    // Set IP address configuration to DHCP if needed
+    //
+    setIpDefaults();
+
+    sl_WlanPolicySet(SL_POLICY_CONNECTION , SL_CONNECTION_POLICY(1,0,0,0,0), 0, 0);
+
+}
+
 //--tested, working--//
 int WiFiClass::begin(char* ssid)
 {
     //
     // If we already called begin and are already connecting
-    // then return the status. This prevents sl_WlanConnect() 
+    // then return the status. This prevents sl_WlanConnect()
     // from being called repeatedly.
     //
     if(_connecting) {
@@ -244,13 +275,13 @@ int WiFiClass::begin(char* ssid)
     int NameLen = strlen(ssid);
     SlSecParams_t SecParams = {0};
     SecParams.Type = SL_SEC_TYPE_OPEN;
-    
+
     //
     //Connect to the access point (non enterprise, so 5th argument is NULL);
     //also mac address parameter set as null (3rd argument)
     //
     int iRet = sl_WlanConnect(ssid, NameLen, NULL, &SecParams, NULL);
-    
+
     //
     //return appropriate status as described by arduino wifi library
     //the WiFiClass:WiFi_status is handled by the WlanEvenHandler
@@ -263,7 +294,7 @@ int WiFiClass::begin(char* ssid)
     } else {
         return WL_CONNECT_FAILED;
     }
-    
+
 }
 
 
@@ -272,14 +303,14 @@ int WiFiClass::begin(char* ssid, uint8_t key_idx, char* key)
 {
     //
     // If we already called begin and are already connecting
-    // then return the status. This prevents sl_WlanConnect() 
+    // then return the status. This prevents sl_WlanConnect()
     // from being called repeatedly.
     //
     if(_connecting) {
         delay(500);
         return status();
     }
- 
+
     //
     //initialize the simplelink driver and make sure it was a success
     //
@@ -287,7 +318,7 @@ int WiFiClass::begin(char* ssid, uint8_t key_idx, char* key)
     if (!init_success) {
         return WL_CONNECT_FAILED;
     }
-    
+
     //
     // Set IP address configuration to DHCP if needed
     //
@@ -304,13 +335,13 @@ int WiFiClass::begin(char* ssid, uint8_t key_idx, char* key)
     SecParams.Type = SL_SEC_TYPE_WEP;
     SecParams.Key = key;
     SecParams.KeyLen = strlen(key);
-    
+
     //
     //Connect to the access point (non enterprise, so 5th argument is NULL);
     //also mac address parameter set as null (3rd argument)
     //
     int iRet = sl_WlanConnect(ssid, NameLen, NULL, &SecParams, NULL);
-    
+
     //
     //return appropriate status as described by arduino wifi library
     //the WiFiClass:WiFi_status is handled by the WlanEvenHandler
@@ -323,7 +354,7 @@ int WiFiClass::begin(char* ssid, uint8_t key_idx, char* key)
     } else {
         return WL_CONNECT_FAILED;
     }
-    
+
 }
 
 //--tested, working--//
@@ -331,7 +362,7 @@ int WiFiClass::begin(char* ssid, char *passphrase)
 {
     //
     // If we already called begin and are already connecting
-    // then return the status. This prevents sl_WlanConnect() 
+    // then return the status. This prevents sl_WlanConnect()
     // from being called repeatedly.
     //
     if(_connecting) {
@@ -363,7 +394,7 @@ int WiFiClass::begin(char* ssid, char *passphrase)
     SecParams.Type = SL_SEC_TYPE_WPA;
     SecParams.Key = passphrase;
     SecParams.KeyLen = strlen(passphrase);
-    
+
     //
     //connect to the access point (non enterprise, so 5th argument is NULL)
     //also mac address parameters set as null (3rd argument)
@@ -469,7 +500,7 @@ void WiFiClass::config(IPAddress local_ip)
     _NetCfgIpV4Args_t config = {0};
     unsigned char len = sizeof(_NetCfgIpV4Args_t);
     sl_NetCfgGet(SL_IPV4_STA_P2P_CL_GET_INFO, NULL, &len, (unsigned char*)&config);
-    
+
     //
     //Assign new ip address to current config
     //and use netcfgset to set the new configuration in memory
@@ -496,7 +527,7 @@ void WiFiClass::config(IPAddress local_ip, IPAddress dns_server)
     _NetCfgIpV4Args_t config = {0};
     unsigned char len = sizeof(_NetCfgIpV4Args_t);
     sl_NetCfgGet(SL_IPV4_STA_P2P_CL_GET_INFO, NULL, &len, (unsigned char*)&config);
-    
+
     //
     //Assign new ip address and new dns server to current config
     //and use netcfgset to set the new configuration in memory
@@ -504,7 +535,7 @@ void WiFiClass::config(IPAddress local_ip, IPAddress dns_server)
     config.ipV4 = sl_Ntohl((uint32_t)local_ip);
     config.ipV4DnsServer = sl_Ntohl((uint32_t)dns_server);
     sl_NetCfgSet(SL_IPV4_STA_P2P_CL_STATIC_ENABLE, 1, sizeof(_NetCfgIpV4Args_t), (unsigned char*)&config);
-    
+
 }
 
 void WiFiClass::config(IPAddress local_ip, IPAddress dns_server, IPAddress gateway)
@@ -525,7 +556,7 @@ void WiFiClass::config(IPAddress local_ip, IPAddress dns_server, IPAddress gatew
     _NetCfgIpV4Args_t config = {0};
     unsigned char len = sizeof(_NetCfgIpV4Args_t);
     sl_NetCfgGet(SL_IPV4_STA_P2P_CL_GET_INFO, NULL, &len, (unsigned char*)&config);
-    
+
     //
     //Assign new ip address and new dns server to current config
     //and use netcfgset to set the new configuration in memory
@@ -534,7 +565,7 @@ void WiFiClass::config(IPAddress local_ip, IPAddress dns_server, IPAddress gatew
     config.ipV4DnsServer = sl_Ntohl((uint32_t)dns_server);
     config.ipV4Gateway = sl_Ntohl((uint32_t)gateway);
     sl_NetCfgSet(SL_IPV4_STA_P2P_CL_STATIC_ENABLE, 1, sizeof(_NetCfgIpV4Args_t), (unsigned char*)&config);
-    
+
 }
 
 void WiFiClass::config(IPAddress local_ip, IPAddress dns_server, IPAddress gateway, IPAddress subnet)
@@ -555,7 +586,7 @@ void WiFiClass::config(IPAddress local_ip, IPAddress dns_server, IPAddress gatew
     _NetCfgIpV4Args_t config = {0};
     unsigned char len = sizeof(_NetCfgIpV4Args_t);
     sl_NetCfgGet(SL_IPV4_STA_P2P_CL_GET_INFO, NULL, &len, (unsigned char*)&config);
-    
+
     //
     //Assign new ip address and new dns server to current config
     //and use netcfgset to set the new configuration in memory
@@ -565,7 +596,7 @@ void WiFiClass::config(IPAddress local_ip, IPAddress dns_server, IPAddress gatew
     config.ipV4Gateway = sl_Ntohl((uint32_t)gateway);
     config.ipV4Mask = sl_Ntohl((uint32_t)subnet);
     sl_NetCfgSet(SL_IPV4_STA_P2P_CL_STATIC_ENABLE, 1, sizeof(_NetCfgIpV4Args_t), (unsigned char*)&config);
-    
+
 }
 
 
@@ -580,7 +611,7 @@ void WiFiClass::setDNS(IPAddress dns_server1)
     _NetCfgIpV4Args_t config = {0};
     unsigned char len = sizeof(_NetCfgIpV4Args_t);
     sl_NetCfgGet(SL_IPV4_STA_P2P_CL_GET_INFO, NULL, &len, (unsigned char*)&config);
-    
+
     //
     //Assign new ip address and new dns server to current config
     //and use netcfgset to set the new configuration in memory
@@ -612,8 +643,8 @@ int WiFiClass::disconnect(void)
     //
     int iRet = sl_WlanDisconnect();
     return WiFi_status;
-    
-    
+
+
 }
 
 uint8_t* WiFiClass::macAddress(uint8_t* mac)
@@ -632,7 +663,7 @@ uint8_t* WiFiClass::macAddress(uint8_t* mac)
     //All the arduino examples return the mac address reverse from simplelink
     //
     memcpy(mac, macTemp, 6);
-    
+
     return mac;
 }
 
@@ -669,14 +700,14 @@ IPAddress WiFiClass::subnetMask()
     _NetCfgIpV4Args_t config = {0};
     unsigned char len = sizeof(_NetCfgIpV4Args_t);
     sl_NetCfgGet(SL_IPV4_STA_P2P_CL_GET_INFO, NULL, &len, (unsigned char*)&config);
-    
+
     //
     //change the uint32_t IP to the IPAddress class and return
     //
     IPAddress retIP(0,0,0,0);
     retIP = sl_Htonl(config.ipV4Mask);
     return retIP;
-    
+
 }
 
 //--tested, working--//
@@ -691,7 +722,7 @@ IPAddress WiFiClass::gatewayIP()
     _NetCfgIpV4Args_t config = {0};
     unsigned char len = sizeof(_NetCfgIpV4Args_t);
     sl_NetCfgGet(SL_IPV4_STA_P2P_CL_GET_INFO, NULL, &len, (unsigned char*)&config);
-    
+
     //
     //change the uint32_t IP to the IPAddress class and return
     //
@@ -735,7 +766,7 @@ uint8_t* WiFiClass::BSSID(uint8_t* bssid)
     //compatability with the Arduino WiFi library
     //
     return WiFiClass::connected_bssid;
-    
+
 }
 
 
@@ -760,14 +791,14 @@ int8_t WiFiClass::scanNetworks()
 
     const int WLAN_SCAN_COUNT = 20;
     int iRet;
-    
+
     unsigned char ucpolicyOpt;
     union
     {
         unsigned char ucPolicy[4];
         unsigned int uiPolicyLen;
     }policyVal;
-    
+
     //
     // make sure the connection policy is not set (so no scan is run in the background)
     //
@@ -788,22 +819,22 @@ int8_t WiFiClass::scanNetworks()
         return 0;
     }
     delay(300);
-    
+
     //
     // get scan results - all 20 entries in one transaction
     // this array isn't actually used, but you have to do this to get the count
     //
     Sl_WlanNetworkEntry_t found_networks[WLAN_SCAN_COUNT];
     network_count = sl_WlanGetNetworkList(0, (unsigned char)WLAN_SCAN_COUNT, found_networks);
-    
+
     //
     // disable scan
     //
     ucpolicyOpt = SL_SCAN_POLICY(0);
     sl_WlanPolicySet(SL_POLICY_SCAN , ucpolicyOpt, NULL, 0);
-    
+
     return network_count;
-    
+
 }
 
 //--tested, working--//
@@ -818,7 +849,7 @@ char* WiFiClass::SSID(uint8_t networkItem)
     if (networkItem >= network_count) {
         return NULL;
     }
-    
+
     //
     //fetch all 20 items. For some reason, fetching a single item doesn't work
     //
@@ -828,7 +859,7 @@ char* WiFiClass::SSID(uint8_t networkItem)
 
     strcpy(string_output_buffer, (const char*)netInfo[networkItem].ssid);
     return  string_output_buffer;
-    
+
 }
 
 //--tested, working--//
@@ -850,9 +881,9 @@ uint8_t WiFiClass::encryptionType(uint8_t networkItem)
     Sl_WlanNetworkEntry_t netInfo[network_count];
     memset(&netInfo, 0, sizeof(netInfo));
     sl_WlanGetNetworkList(0, network_count, (Sl_WlanNetworkEntry_t*)&netInfo);
-    
+
     uint8_t security = netInfo[networkItem].sec_type;
-    
+
     //
     //the security type returned by simplelink has to be matched
     //to the security type that would be returned by arduino
@@ -885,14 +916,14 @@ int32_t WiFiClass::RSSI(uint8_t networkItem)
     if (networkItem >= network_count) {
         return 0;
     }
-    
+
     //
     //fetch all 20 items. For some reason, fetching a single item doesn't work
     //
     Sl_WlanNetworkEntry_t netInfo[network_count];
     memset(&netInfo, 0, sizeof(netInfo));
     sl_WlanGetNetworkList(0, network_count, (Sl_WlanNetworkEntry_t*)&netInfo);
-    
+
     return (int32_t)netInfo[networkItem].rssi;
 }
 
@@ -924,13 +955,13 @@ int WiFiClass::hostByName(char* aHostname, IPAddress& aResult)
     unsigned long DestinationIP;
     int iRet = sl_NetAppDnsGetHostByName(aHostname, strlen(aHostname), &DestinationIP, SL_AF_INET);
     aResult = sl_Htonl(DestinationIP);
-    
+
     if (iRet >= 0) {
         return 1;
     } else {
         return iRet;
     }
-    
+
 }
 
 int WiFiClass::startSmartConfig()
@@ -1128,6 +1159,3 @@ void WiFiClass::clearCredentials() {
 
 
 WiFiClass WiFi;
-
-
-
