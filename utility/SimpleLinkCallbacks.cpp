@@ -2,17 +2,17 @@
  SimpleLinkCallbacks.c
  Author: Noah Luskey | LuskeyNoah@gmail.com
  Use: Place code for callbacks in this file if desired.
- 
+
  This library is free software; you can redistribute it and/or
  modify it under the terms of the GNU Lesser General Public
  License as published by the Free Software Foundation; either
  version 2.1 of the License, or (at your option) any later version.
- 
+
  This library is distributed in the hope that it will be useful,
  but WITHOUT ANY WARRANTY; without even the implied warranty of
  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  Lesser General Public License for more details.
- 
+
  You should have received a copy of the GNU Lesser General Public
  License along with this library; if not, write to the Free Software
  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
@@ -43,7 +43,7 @@ extern void sl_WlanEvtHdlr(SlWlanEvent_t *pSlWlanEvent)
     unsigned char tmp[4] = {0,0,0,0};
 
     switch (pSlWlanEvent->Event) {
-        
+
         //
         //Wlan has connected to a station
         //brackets necessary to avoid crosses initialization error
@@ -60,7 +60,7 @@ extern void sl_WlanEvtHdlr(SlWlanEvent_t *pSlWlanEvent)
             }
             memcpy(WiFiClass::connected_ssid, pSSID, ssidLength);
             WiFiClass::connected_ssid[ssidLength] = '\0';
-            
+
             //
             //copy bssid to WiFiClass (no null terminator. Length always = 6)
             //
@@ -73,15 +73,16 @@ extern void sl_WlanEvtHdlr(SlWlanEvent_t *pSlWlanEvent)
             WiFiClass::connected_bssid[0] = pBSSID[5];
             break;
         }
-            
+
         //
         //Wlan has disconnected, so completely zero out the ssid and bssid
         //
         case SL_WLAN_DISCONNECT_EVENT:
+            WiFiClass::_connecting = false;
             WiFiClass::WiFi_status = WL_DISCONNECTED;
             memset(WiFiClass::connected_ssid, 0, MAX_SSID_LEN);
             memset(WiFiClass::connected_bssid, 0, BSSID_LEN);
-            
+
             break;
 
         /* Track station connects & disconnects in AP mode */
@@ -97,7 +98,7 @@ extern void sl_WlanEvtHdlr(SlWlanEvent_t *pSlWlanEvent)
             WiFiClass::_connectedDeviceCount--;
             break;
 
-            
+
         default:
             break;
     }
